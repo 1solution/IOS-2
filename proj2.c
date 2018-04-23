@@ -11,6 +11,28 @@
 #define XPBUS "/xpbus"
 #define XPALLABOARD "/xpallaboard"
 #define XPRIDEFINISHED "/xpridefinished"
+	
+	void clean(); // cleaning fction
+	
+	/* SEMAPHORES */
+	sem_t *xpallaboard = NULL;
+	sem_t *xpbus = NULL;
+	sem_t *xpmutex = NULL;
+	sem_t *xpridefinished = NULL;
+	
+	/* SHARED MEMORY variables */
+	int *SET = NULL;
+	int id_SET = 0;
+	int *A = NULL;
+	int id_A = 0;
+	int *CR = NULL;
+	int id_CR = 0;
+	int *TOT = NULL;
+	int id_TOT = 0;
+	int *FIN = NULL;
+	int id_FIN = 0;
+	int *E = NULL;
+	int id_E = 0;
 
 int main(int argc, char **argv) {
 	
@@ -27,44 +49,42 @@ int main(int argc, char **argv) {
 	if(ABT < 0 || ABT > 1000 || ART < 0 || ART > 1000)
 		goto arg_error;	
 
-	/* SHARED MEMORY variables */
-	int *A = NULL;
-	int id_A = 0;
+	/* FILE creating and buffer setting */
+	FILE *fp = fopen("proj2.out","w+");
+	if(fp == NULL) {
+		fprintf(stderr,"Cannot create file.\n");
+		return 4;
+	}
+	/*FILE *fp = stdin;*/
+	setbuf(fp, NULL);
+	
+	/* SHARED MEMORY allocation */
     if ((id_A = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | 0666)) == -1)
 		goto shm_error;
     if ((A = shmat(id_A, NULL, 0)) == NULL)
 		goto shm_error;
-	int *CR = NULL;
-	int id_CR = 0;
     if ((id_CR = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | 0666)) == -1)
 		goto shm_error;       
     if ((CR = shmat(id_CR, NULL, 0)) == NULL)
 		goto shm_error;
-	int *TOT = NULL;
-	int id_TOT = 0;
     if ((id_TOT = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | 0666)) == -1)
 		goto shm_error;       
     if ((TOT = shmat(id_TOT, NULL, 0)) == NULL)
 		goto shm_error;
-	int *FIN = NULL;
-	int id_FIN = 0;
     if ((id_FIN = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | 0666)) == -1)
 		goto shm_error;       
     if ((FIN = shmat(id_FIN, NULL, 0)) == NULL)
 		goto shm_error;
-	int *E = NULL;
-	int id_E = 0;
     if ((id_E = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | 0666)) == -1)
 		goto shm_error;       
     if ((E = shmat(id_E, NULL, 0)) == NULL)
 		goto shm_error;
-	int *SET = NULL;
-	int id_SET = 0;
     if ((id_SET = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | 0666)) == -1)
 		goto shm_error;       
     if ((SET = shmat(id_SET, NULL, 0)) == NULL)
 		goto shm_error;
 	
+	/* SHARED MEMORY variables */
 	*A = 1; // total operations counter
 	*CR = 0; // rider son bus stop
 	*TOT = 0; // how many got on bus in total
@@ -72,13 +92,7 @@ int main(int argc, char **argv) {
 	*E = 0; // how many got in bus
 	*SET = 0; // intern counter of one interval of riders who made it to bus stop in time
 	
-	/* SEMAPHORES */
-	sem_t *xpallaboard = NULL;
-	sem_t *xpbus = NULL;
-	sem_t *xpmutex = NULL;
-	sem_t *xpridefinished = NULL;
-	
-	if((xpmutex = sem_open(XPMUTEX, O_CREAT, 0644, 1)) == SEM_FAILED)
+	if((xpmutex = sem_open(XPMUTEX, O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED)
 		goto sem_error;
 	if((xpbus = sem_open(XPBUS, O_CREAT | O_EXCL, 0666, 0)) == SEM_FAILED)
 		goto sem_error;
@@ -86,13 +100,6 @@ int main(int argc, char **argv) {
 		goto sem_error;
 	if((xpridefinished = sem_open(XPRIDEFINISHED, O_CREAT | O_EXCL, 0666, 0)) == SEM_FAILED)
 		goto sem_error;	
-	
-	FILE *fp = fopen("proj2.out","w+");
-	if(fp == NULL) {
-		fprintf(stderr,"Cannot create file.\n");
-		return 4;
-	}	
-	setbuf(fp, NULL);
 	
 	/* PROCCESS GEN. starts */	
 	pid_t xp_bus = fork();
@@ -115,13 +122,13 @@ int main(int argc, char **argv) {
 		(*A)++;fprintf(fp,"%d\t\t: BUS\t\t: depart\n",*A);
 		sem_post(xpmutex);
 		
-		// IS COMING OUT!!		
+		// bus departing		
 		usleep(rand()%(1000*ABT+1));
 		(*A)++;fprintf(fp,"%d\t\t: BUS\t\t: end\n",*A);		
-		// IS COMING BACK!!
+		// bus arriving
 		
 		for(int i = 0; i < *E; i++)	
-			sem_post(xpridefinished); // signals that it is ending ride		
+			sem_post(xpridefinished); // signals that it is ending ride, needed *E times (*E riders are waiting)	
 	}
 		
 	(*A)++;fprintf(fp,"%d\t\t: BUS\t\t: finish\n",*A);		
@@ -175,6 +182,32 @@ int main(int argc, char **argv) {
 		}		
 	}
 	
+	clean();
+	fclose(fp);
+	return 0;
+	
+	shm_error:
+	clean();
+	fprintf(stderr,"Shared memory error.\n");
+	return 1;	
+	
+	sem_error:
+	clean();
+	fprintf(stderr,"Error while creating semaphores.\n");
+	return 2;	
+		
+	arg_error:
+	clean();
+	fprintf(stderr,"Bad arguments.\n");
+	return 3;
+	
+	proc_error:
+	clean();
+	fprintf(stderr,"Error while creating process.\n");
+	return 4;
+}
+
+void clean() {
 	sem_close(xpridefinished);
 	sem_close(xpmutex);
 	sem_close(xpbus);
@@ -182,20 +215,11 @@ int main(int argc, char **argv) {
 	sem_unlink(XPRIDEFINISHED);
 	sem_unlink(XPMUTEX);
 	sem_unlink(XPBUS);
-	sem_unlink(XPALLABOARD);
-	
-	fclose(fp);
-	return 0;
-	
-	shm_error:
-	fprintf(stderr,"Shared memory error.\n");
-	return 1;	
-	
-	sem_error:
-	fprintf(stderr,"Error while creating semaphores.\n");
-	return 2;	
-		
-	arg_error:
-	fprintf(stderr,"Bad arguments.\n");
-	return 3;
+	sem_unlink(XPALLABOARD);	
+	shmctl(id_A, IPC_RMID, NULL);
+	shmctl(id_CR, IPC_RMID, NULL);
+	shmctl(id_TOT, IPC_RMID, NULL);
+	shmctl(id_FIN, IPC_RMID, NULL);
+	shmctl(id_E, IPC_RMID, NULL);
+	shmctl(id_SET, IPC_RMID, NULL);
 }
