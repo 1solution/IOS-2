@@ -138,18 +138,17 @@ int main(int argc, char **argv) {
 	exit(0);
 	}
 	
-	if(xp_bus > 0) { // PARENT PT 1	 
+	if(xp_bus > 0) { // PARENT PT 1	
 		pid_t xp_genrider = fork();		
-		if(xp_genrider > 0) { // PARENT PT 2		
-			waitpid(xp_bus, NULL, 0);
+		if(xp_genrider > 0) { // PARENT PT 2	
 			waitpid(xp_genrider, NULL, 0);
-		}
-		
-		else if(xp_genrider == 0) {  // CHILD: RIDERMANAGER		
+			waitpid(xp_bus, NULL, 0);
+		}		
+		else if(xp_genrider == 0) {  // CHILD: RIDERMANAGER	
 		pid_t waitpid; // waiting
 		pid_t xp_rider[R];
 		
-		for(unsigned int i = 1; i < R+1; i++) { // CHILD: RIDER GEN LOOP
+		for(unsigned int i = 1; i < R+1; i++) { // generating child RIDERS in loop
 			usleep(rand()%(1000*ART+1));
 			xp_rider[i] = fork();
 			if(xp_rider[i] == 0) {
@@ -177,21 +176,22 @@ int main(int argc, char **argv) {
 				sem_wait(w); (*A)++;fprintf(fp,"%d\t\t: RID %d\t\t: finish\n",*A,i); sem_post(w);
 				exit(0);				
 			}
-			/*if(xp_rider[i] < 0) { // one of proc xp_rider[i] failed
-			kill(pid,SIGKILL); // kill all riders - childs of xp_genrider	
-			}*/
-		}		
+			if(xp_rider[i] < 0) { // one of proc xp_rider[i] failed
+				kill(-1*getpid(),SIGTERM); // kill all riders - childs of xp_genrider	
+			}
+		}
 		while ((waitpid = wait(0)) > 0); // waiting for all riders to end
-		*FIN = 1; // all riders are finished, which means bus can go banzai
+		*FIN = 1; // all riders are finished
 		exit(0);
 		}		
-		/*else // fork xp_genrider failed
-			// kill bus
-			goto proc_error;*/
+		else { // fork xp_genrider failed
+			kill(-1*getpid(),SIGTERM);	
+			goto proc_error;
+		}
 	}
-	/*if(xp_bus < 0) { // proc xp_bus failed
+	if(xp_bus < 0) { // proc xp_bus failed
 		goto proc_error;
-	}*/
+	}
 	
 	clean();
 	fclose(fp);
@@ -212,10 +212,10 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"Bad arguments.\n");
 	return 1;
 	
-	/*proc_error: // fork returned -1
+	proc_error: // fork returned -1
 	clean();
 	fprintf(stderr,"Process failure.\n");
-	return 1;*/
+	return 1;
 }
 
 void clean() {
