@@ -191,8 +191,7 @@ int main(int argc, char **argv) {
 		exit(0);
 		}		
 		else { // fork xp_genrider failed
-			kill(-1*getpid(),SIGTERM);	
-			goto proc_error;
+			kill(-1*getpid(),SIGTERM);
 		}
 	}
 	if(xp_bus < 0) { // proc xp_bus failed
