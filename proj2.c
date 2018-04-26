@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
 			waitpid(xp_genrider, NULL, 0);
 		}
 		
-		else if(xp_genrider == 0) { // CHILD: RIDMANAGER		
+		else if(xp_genrider == 0) {  // CHILD: RIDERMANAGER		
 		pid_t waitpid; // waiting
 		pid_t xp_rider[R];
 		
@@ -174,37 +174,45 @@ int main(int argc, char **argv) {
 				(*A)++;fprintf(fp,"%d\t\t: RID %d\t\t: finish\n",*A,i);
 				exit(0);				
 			}
-		}
-		
+			/*if(xp_rider[i] < 0) { // one of proc xp_rider[i] failed
+			kill(pid,SIGKILL); // kill all riders - childs of xp_genrider	
+			}*/
+		}		
 		while ((waitpid = wait(0)) > 0); // waiting for all riders to end
 		*FIN = 1; // all riders are finished, which means bus can go banzai
 		exit(0);
 		}		
+		/*else // fork xp_genrider failed
+			// kill bus
+			goto proc_error;*/
 	}
+	/*if(xp_bus < 0) { // proc xp_bus failed
+		goto proc_error;
+	}*/
 	
 	clean();
 	fclose(fp);
 	return 0;
 	
-	shm_error:
+	shm_error: // shared memory error
 	clean();
 	fprintf(stderr,"Shared memory error.\n");
 	return 1;	
 	
-	sem_error:
+	sem_error: // semaphore error
 	clean();
 	fprintf(stderr,"Error while creating semaphores.\n");
-	return 2;	
+	return 1;	
 		
-	arg_error:
+	arg_error: // bad arguments
 	clean();
 	fprintf(stderr,"Bad arguments.\n");
-	return 3;
+	return 1;
 	
-	proc_error:
+	/*proc_error: // fork returned -1
 	clean();
-	fprintf(stderr,"Error while creating process.\n");
-	return 4;
+	fprintf(stderr,"Process failure.\n");
+	return 1;*/
 }
 
 void clean() {
