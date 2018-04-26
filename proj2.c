@@ -20,7 +20,7 @@
 	sem_t *xpbus = NULL;
 	sem_t *xpmutex = NULL;
 	sem_t *xpridefinished = NULL;
-	sem_t *w = NULL;
+	sem_t *w = NULL; // sem. for writing one line at time
 	
 	/* SHARED MEMORY variables */
 	int *SET = NULL;
