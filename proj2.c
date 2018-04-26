@@ -1,3 +1,9 @@
+/* 
+Michal Plsek, xplsek03
+IOS proj2, 26.4.2018
+proj2.c
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
