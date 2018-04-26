@@ -11,6 +11,7 @@
 #define XPBUS "/xpbus"
 #define XPALLABOARD "/xpallaboard"
 #define XPRIDEFINISHED "/xpridefinished"
+#define W "/xpw"
 	
 	void clean(); // cleaning fction
 	
@@ -19,6 +20,7 @@
 	sem_t *xpbus = NULL;
 	sem_t *xpmutex = NULL;
 	sem_t *xpridefinished = NULL;
+	sem_t *w = NULL;
 	
 	/* SHARED MEMORY variables */
 	int *SET = NULL;
@@ -53,9 +55,8 @@ int main(int argc, char **argv) {
 	FILE *fp = fopen("proj2.out","w+");
 	if(fp == NULL) {
 		fprintf(stderr,"Cannot create file.\n");
-		return 4;
+		return 1;
 	}
-	/*FILE *fp = stdin;*/
 	setbuf(fp, NULL);
 	
 	/* SHARED MEMORY allocation */
@@ -100,38 +101,40 @@ int main(int argc, char **argv) {
 		goto sem_error;
 	if((xpridefinished = sem_open(XPRIDEFINISHED, O_CREAT | O_EXCL, 0666, 0)) == SEM_FAILED)
 		goto sem_error;	
+	if((w = sem_open(W, O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED)
+		goto sem_error;	
 	
 	/* PROCCESS GEN. starts */	
 	pid_t xp_bus = fork();
 	
 	if(xp_bus == 0) { // CHILD: BUS	
-	fprintf(fp,"%d\t\t: BUS\t\t: start\n",*A); fflush(fp);
+	sem_wait(w); fprintf(fp,"%d\t\t: BUS\t\t: start\n",*A); sem_post(w);
 	
 	while(*TOT <= R && *FIN != 1) {	
 			sem_wait(xpmutex);	
-			(*A)++;fprintf(fp,"%d\t\t: BUS\t\t: arrival\n",*A); fflush(fp);
+			sem_wait(w); (*A)++;fprintf(fp,"%d\t\t: BUS\t\t: arrival\n",*A); sem_post(w);
 			
 			if(*CR > 0) {				
-					(*A)++;fprintf(fp,"%d\t\t: BUS\t\t: start boarding: %lu\n",*A,(*CR > C ? C : *CR)); fflush(fp);
+					sem_wait(w); (*A)++;fprintf(fp,"%d\t\t: BUS\t\t: start boarding: %lu\n",*A,(*CR > C ? C : *CR)); sem_post(w);
 					*E = 0; // null E counter for rider capacity counting loop
 					sem_post(xpbus); // signal to riders to start loading - LOADING STARTS
 					sem_wait(xpallaboard); // wait untill last rider signals that everybodys on board - LOADING FINISHES
 					*TOT+=*E;
-					(*A)++;fprintf(fp,"%d\t\t: BUS \t\t: end boarding: 0\n",*A); fflush(fp);
+					sem_wait(w); (*A)++;fprintf(fp,"%d\t\t: BUS \t\t: end boarding: 0\n",*A); sem_post(w);
 			}		
-		(*A)++;fprintf(fp,"%d\t\t: BUS\t\t: depart\n",*A); fflush(fp);
+		sem_wait(w); (*A)++;fprintf(fp,"%d\t\t: BUS\t\t: depart\n",*A); sem_post(w);
 		sem_post(xpmutex);
 		
 		// bus departing		
 		usleep(rand()%(1000*ABT+1));
-		(*A)++;fprintf(fp,"%d\t\t: BUS\t\t: end\n",*A);	fflush(fp);	
+		sem_wait(w); (*A)++;fprintf(fp,"%d\t\t: BUS\t\t: end\n",*A);	sem_post(w);	
 		// bus arriving
 		
 		for(int i = 0; i < *E; i++)	
 			sem_post(xpridefinished); // signals that it is ending ride, needed *E times (*E riders are waiting)	
 	}
 		
-	(*A)++;fprintf(fp,"%d\t\t: BUS\t\t: finish\n",*A); fflush(fp);		
+	sem_wait(w); (*A)++;fprintf(fp,"%d\t\t: BUS\t\t: finish\n",*A); sem_post(w);		
 	exit(0);
 	}
 	
@@ -150,18 +153,18 @@ int main(int argc, char **argv) {
 			usleep(rand()%(1000*ART+1));
 			xp_rider[i] = fork();
 			if(xp_rider[i] == 0) {
-				(*A)++;fprintf(fp,"%d\t\t: RID %d\t\t: start\n",*A,i); fflush(fp);
+				sem_wait(w); (*A)++;fprintf(fp,"%d\t\t: RID %d\t\t: start\n",*A,i); sem_post(w);
 				
 				sem_wait(xpmutex);
 				(*SET)++;(*A)++;
-				(*CR)++;fprintf(fp,"%d\t\t: RID %d\t\t: enter: %d\n",*A,i,*SET); fflush(fp);
+				sem_wait(w); (*CR)++;fprintf(fp,"%d\t\t: RID %d\t\t: enter: %d\n",*A,i,*SET); sem_post(w);
 				sem_post(xpmutex);
 				
 				sem_wait(xpbus); // wait until bus is ready to start loading
 				*SET = 0;
 				// LOADING START
 					(*E)++;
-					(*A)++;fprintf(fp,"%d\t\t: RID %d\t\t: boarding\n",*A,i); fflush(fp);
+					sem_wait(w); (*A)++;fprintf(fp,"%d\t\t: RID %d\t\t: boarding\n",*A,i); sem_post(w);
 					(*CR)--;
 					if(*CR == 0 || *E == C) {
 						sem_post(xpallaboard); // last rider signals that everybody is onboard
@@ -171,7 +174,7 @@ int main(int argc, char **argv) {
 						sem_post(xpbus);					
 				
 				sem_wait(xpridefinished);
-				(*A)++;fprintf(fp,"%d\t\t: RID %d\t\t: finish\n",*A,i); fflush(fp);
+				sem_wait(w); (*A)++;fprintf(fp,"%d\t\t: RID %d\t\t: finish\n",*A,i); sem_post(w);
 				exit(0);				
 			}
 			/*if(xp_rider[i] < 0) { // one of proc xp_rider[i] failed
@@ -216,6 +219,7 @@ int main(int argc, char **argv) {
 }
 
 void clean() {
+	sem_close(w);
 	sem_close(xpridefinished);
 	sem_close(xpmutex);
 	sem_close(xpbus);
@@ -223,7 +227,8 @@ void clean() {
 	sem_unlink(XPRIDEFINISHED);
 	sem_unlink(XPMUTEX);
 	sem_unlink(XPBUS);
-	sem_unlink(XPALLABOARD);	
+	sem_unlink(XPALLABOARD);
+	sem_unlink(W);
 	shmctl(id_A, IPC_RMID, NULL);
 	shmctl(id_CR, IPC_RMID, NULL);
 	shmctl(id_TOT, IPC_RMID, NULL);
